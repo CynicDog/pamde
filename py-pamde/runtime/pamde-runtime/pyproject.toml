@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.12,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pamde-runtime"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Compiled Rust extension for pamde (Parquet Metadata Editor)"
+
+[tool.maturin]
+# Places the .so inside the _pamde_runtime/ folder so Python imports it as
+#   from _pamde_runtime._pamde_runtime import PyParquetFile
+module-name = "_pamde_runtime._pamde_runtime"

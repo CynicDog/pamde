@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pamde"
+version = "0.1.0"
+description = "Parquet Metadata Editor — UI and API for reading and editing Parquet metadata"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "typer>=0.12",
+    "pyarrow>=15",
+]
+
+[project.optional-dependencies]
+# Install when the Rust extension has been built via maturin.
+rust = ["pamde-runtime"]
+dev = ["ruff>=0.4", "pytest>=8"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[project.scripts]
+pamde = "pamde.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"pamde.server" = ["static/**/*"]

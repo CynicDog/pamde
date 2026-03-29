@@ -1,0 +1,21 @@
+[package]
+name = "pamde-core"
+version = "0.1.0"
+edition = "2024"
+description = "Core Rust logic for reading and writing Parquet file metadata"
+
+# This crate is pure domain logic + PyO3 bindings (c_api module).
+# It is NOT a cdylib — the maturin bridge (pamde-runtime) is.
+# crate-type is left as default (rlib) so it can be depended on normally.
+
+[dependencies]
+# Parquet reader/writer — we only need the parquet crate, not the full arrow stack.
+# `default-features = false` avoids pulling in arrow IPC, flight, etc.
+parquet = { version = "54", default-features = false, features = ["base64", "flate2"] }
+
+# PyO3 — used only in the c_api module to expose types to Python.
+pyo3 = { version = "0.23", optional = true }
+
+[features]
+# Enable PyO3 bindings when building the maturin runtime bridge.
+extension-module = ["pyo3/extension-module"]

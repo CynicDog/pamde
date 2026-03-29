@@ -1,0 +1,13 @@
+[package]
+name = "pamde-runtime"
+version = "0.1.0"
+edition = "2024"
+description = "Maturin bridge — re-exports pamde-core c_api as a Python extension module"
+
+[lib]
+name = "_pamde_runtime"
+crate-type = ["cdylib"]
+
+[dependencies]
+pamde-core = { path = "../../../crates/pamde-core", features = ["extension-module"] }
+pyo3 = { version = "0.23", features = ["extension-module"] }

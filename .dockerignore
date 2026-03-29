@@ -1,0 +1,9 @@
+ui/node_modules
+py-pamde/.venv
+py-pamde/src/pamde/server/static
+py-pamde/tests/fixtures
+crates/*/target
+py-pamde/runtime/*/target
+.git
+.DS_Store
+code_structure_example
