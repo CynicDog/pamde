@@ -8,10 +8,6 @@
 
 use pyo3::prelude::*;
 
-// ---------------------------------------------------------------------------
-// PyColumnInfo
-// ---------------------------------------------------------------------------
-
 #[pyclass(get_all)]
 pub struct PyColumnInfo {
     pub physical_name: String,
@@ -29,10 +25,6 @@ pub struct PyColumnInfo {
     pub total_uncompressed_size: i64,
     pub column_kv_metadata: Vec<(String, Option<String>)>,
 }
-
-// ---------------------------------------------------------------------------
-// PyParquetFile
-// ---------------------------------------------------------------------------
 
 /// Entry-point type exposed to Python.
 /// Wraps the Rust ParquetFileMeta and provides column/metadata access.
@@ -80,10 +72,6 @@ impl PyParquetFile {
         todo!()
     }
 }
-
-// ---------------------------------------------------------------------------
-// Module registration
-// ---------------------------------------------------------------------------
 
 #[pymodule]
 pub fn _pamde_runtime(m: &Bound<'_, PyModule>) -> PyResult<()> {

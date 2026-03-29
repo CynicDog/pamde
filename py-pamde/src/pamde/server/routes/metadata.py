@@ -24,11 +24,6 @@ def _editor(request: Request) -> ParquetEditor:
     return ParquetEditor.open(request.app.state.parquet_path)
 
 
-# ---------------------------------------------------------------------------
-# Read
-# ---------------------------------------------------------------------------
-
-
 @router.get("/file")
 def get_file(request: Request) -> dict:
     editor = _editor(request)
@@ -40,15 +35,10 @@ def get_file(request: Request) -> dict:
 
 @router.get("/columns")
 def get_columns(request: Request) -> list[dict]:
-    editor = _editor(request)
     import dataclasses
 
+    editor = _editor(request)
     return [dataclasses.asdict(c) for c in editor.columns()]
-
-
-# ---------------------------------------------------------------------------
-# Write
-# ---------------------------------------------------------------------------
 
 
 class FileTagRequest(BaseModel):

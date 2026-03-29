@@ -24,8 +24,10 @@ def edit(
 ) -> None:
     """Open the metadata editor UI for a Parquet file."""
     import webbrowser
-    from pamde.server.app import create_app
+
     import uvicorn
+
+    from pamde.server.app import create_app
 
     server_app = create_app(parquet_path=path)
     url = f"http://{host}:{port}"
@@ -52,8 +54,9 @@ def inspect(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Print column metadata summary to stdout."""
-    from pamde.editor import ParquetEditor
     import json as _json
+
+    from pamde.editor import ParquetEditor
 
     editor = ParquetEditor.open(path)
     cols = editor.columns()

@@ -19,9 +19,11 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
+
 def _use_rust() -> bool:
     try:
         from _pamde_runtime._pamde_runtime import PyParquetFile  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -30,9 +32,11 @@ def _use_rust() -> bool:
 def _make_file(path: str | Path) -> Any:
     if _use_rust():
         from _pamde_runtime._pamde_runtime import PyParquetFile
+
         return PyParquetFile.open(str(path))
     else:
         from pamde._pyarrow_backend import ParquetFile
+
         return ParquetFile(path)
 
 
@@ -101,7 +105,6 @@ class ParquetEditor:
     def backend_name(self) -> str:
         return "rust" if _use_rust() else "pyarrow"
 
-
     def columns(self) -> list[ColumnInfo]:
         """Return one ColumnInfo per leaf column in the Parquet schema."""
         return [ColumnInfo._from_backend(c) for c in self._backend.columns()]
@@ -113,7 +116,6 @@ class ParquetEditor:
         if isinstance(raw, list):
             return dict(raw)
         return raw
-
 
     def set_file_tag(
         self, key: str, value: str | None, *, out_path: str | Path | None = None
@@ -133,5 +135,5 @@ class ParquetEditor:
         self._backend.set_column_tag(column_path, key, value, out_path or self._path)
 
     def save(self, out_path: str | Path) -> None:
-        """Write the current metadata state to out_path (pyarrow backend: no-op, data already written)."""
+        """Write current metadata state to out_path."""
         pass

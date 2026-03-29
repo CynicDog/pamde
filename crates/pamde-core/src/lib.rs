@@ -4,10 +4,6 @@ pub mod schema;
 #[cfg(feature = "extension-module")]
 pub mod c_api;
 
-// ---------------------------------------------------------------------------
-// Shared error type
-// ---------------------------------------------------------------------------
-
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),

@@ -11,12 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
-
-# ---------------------------------------------------------------------------
-# ColumnInfo
-# ---------------------------------------------------------------------------
 
 @dataclass
 class ColumnInfo:
@@ -36,24 +33,15 @@ class ColumnInfo:
     tags: dict[str, str | None] = field(default_factory=dict)
 
 
-# ---------------------------------------------------------------------------
-# ParquetFile
-# ---------------------------------------------------------------------------
-
 class ParquetFile:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
         self._meta = pq.read_metadata(str(self._path))
 
-    # ------------------------------------------------------------------
-    # Inspection
-    # ------------------------------------------------------------------
-
     def columns(self) -> list[ColumnInfo]:
         schema = self._meta.schema
         num_cols = len(schema)
 
-        # Aggregate stats + sizes across all row groups per column index.
         agg: dict[int, dict[str, Any]] = {i: {} for i in range(num_cols)}
         for rg_idx in range(self._meta.num_row_groups):
             rg = self._meta.row_group(rg_idx)
@@ -88,7 +76,6 @@ class ParquetFile:
                         a["min_value"] = new_min if cur_min is None else min(cur_min, new_min)
                         a["max_value"] = new_max if cur_max is None else max(cur_max, new_max)
 
-        # Read arrow schema once for field metadata + field_ids.
         arrow_schema = pq.read_schema(str(self._path))
 
         result: list[ColumnInfo] = []
@@ -127,16 +114,8 @@ class ParquetFile:
             for k, v in raw.items()
         }
 
-    # ------------------------------------------------------------------
-    # Mutation
-    # ------------------------------------------------------------------
-
-    def set_file_tag(
-        self, key: str, value: str | None, out_path: str | Path | None = None
-    ) -> None:
+    def set_file_tag(self, key: str, value: str | None, out_path: str | Path | None = None) -> None:
         dest = Path(out_path or self._path)
-        import pyarrow as pa
-
         table = pq.read_table(str(self._path))
         existing: dict[bytes, bytes] = dict(table.schema.metadata or {})
         kb = key.encode()
@@ -157,8 +136,6 @@ class ParquetFile:
         out_path: str | Path | None = None,
     ) -> None:
         dest = Path(out_path or self._path)
-        import pyarrow as pa
-
         table = pq.read_table(str(self._path))
         top_name = column_path.split(".")[0]
         fields = []
@@ -179,10 +156,6 @@ class ParquetFile:
         if dest == self._path:
             self._meta = pq.read_metadata(str(self._path))
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _to_str(v: Any) -> str:
     if isinstance(v, bytes):
@@ -212,13 +185,10 @@ def _logical_type_str(col_s: Any) -> str | None:
     if lt is None:
         return None
     s = str(lt)
-    # pyarrow returns e.g. "String" or "Null" — return as-is
     return s if s not in ("None", "") else None
 
 
-def _arrow_field_info(
-    arrow_schema: Any, col_name: str
-) -> tuple[dict[str, str | None], int | None]:
+def _arrow_field_info(arrow_schema: Any, col_name: str) -> tuple[dict[str, str | None], int | None]:
     """Return (user tags dict, field_id | None) from the Arrow schema field."""
     try:
         f = arrow_schema.field(col_name)
@@ -232,7 +202,6 @@ def _arrow_field_info(
         for kb, vb in f.metadata.items():
             k = kb.decode("utf-8", errors="replace")
             v = vb.decode("utf-8", errors="replace") if vb is not None else None
-            # Iceberg/Parquet internal keys — surface field_id, hide the rest
             if kb == b"PARQUET:field_id":
                 try:
                     field_id = int(v)  # type: ignore[arg-type]
