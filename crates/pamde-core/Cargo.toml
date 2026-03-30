@@ -13,8 +13,11 @@ description = "Core Rust logic for reading and writing Parquet file metadata"
 # `default-features = false` avoids pulling in arrow IPC, flight, etc.
 parquet = { version = "54", default-features = false, features = ["base64", "flate2"] }
 
+# Thrift serialization — same version parquet uses internally, needed for footer surgery.
+thrift = { version = "0.17", default-features = false }
+
 # PyO3 — used only in the c_api module to expose types to Python.
-pyo3 = { version = "0.23", optional = true }
+pyo3 = { version = "0.28", optional = true }
 
 [features]
 # Enable PyO3 bindings when building the maturin runtime bridge.

@@ -1,10 +1,4 @@
-/// PyO3 bindings — exposes pamde-core types to Python.
-///
-/// Naming convention: Rust types get a `Py` prefix when exposed to Python,
-/// mirroring the pattern in the code structure example.
-///
-/// This module is only compiled when the `extension-module` feature is enabled
-/// (i.e. when building the pamde-runtime maturin package).
+use std::collections::HashMap;
 
 use pyo3::prelude::*;
 
@@ -26,50 +20,76 @@ pub struct PyColumnInfo {
     pub column_kv_metadata: Vec<(String, Option<String>)>,
 }
 
-/// Entry-point type exposed to Python.
-/// Wraps the Rust ParquetFileMeta and provides column/metadata access.
 #[pyclass]
 pub struct PyParquetFile {
-    // inner: crate::metadata::ParquetFileMeta,
+    inner: crate::metadata::ParquetFileMeta,
 }
 
 #[pymethods]
 impl PyParquetFile {
     #[new]
-    pub fn open(_path: &str) -> PyResult<Self> {
-        todo!("open parquet file and return PyParquetFile")
+    pub fn open(path: &str) -> PyResult<Self> {
+        let inner = crate::metadata::ParquetFileMeta::open(path)?;
+        Ok(Self { inner })
     }
 
-    /// Return list of PyColumnInfo, one per leaf column.
     pub fn columns(&self) -> PyResult<Vec<PyColumnInfo>> {
-        todo!()
+        let cols = crate::schema::ColumnInfo::from_file_meta(&self.inner)?;
+        Ok(cols
+            .into_iter()
+            .map(|c| PyColumnInfo {
+                physical_name: c.physical_name,
+                path_in_schema: c.path_in_schema,
+                physical_type: c.physical_type,
+                logical_type: c.logical_type,
+                repetition: c.repetition,
+                field_id: c.field_id,
+                null_count: c.null_count,
+                distinct_count: c.distinct_count,
+                min_value: c.min_value,
+                max_value: c.max_value,
+                compression: c.compression,
+                total_compressed_size: c.total_compressed_size,
+                total_uncompressed_size: c.total_uncompressed_size,
+                column_kv_metadata: c.column_kv_metadata,
+            })
+            .collect())
     }
 
-    /// Return file-level key/value metadata as a dict {key: value | None}.
-    /// Matches the pyarrow backend interface so editor.py handles both uniformly.
-    pub fn file_tags(&self) -> PyResult<std::collections::HashMap<String, Option<String>>> {
-        todo!()
+    pub fn file_tags(&self) -> PyResult<HashMap<String, Option<String>>> {
+        Ok(self.inner.file_kv_metadata().into_iter().collect())
     }
 
-    /// Upsert a file-level metadata key.  Pass value=None to remove the key.
     pub fn set_file_tag(
         &mut self,
-        _key: &str,
-        _value: Option<&str>,
-        _out_path: &str,
+        key: &str,
+        value: Option<&str>,
+        out_path: &str,
     ) -> PyResult<()> {
-        todo!()
+        self.inner.set_file_kv(key, value, out_path)?;
+        Ok(())
     }
 
-    /// Upsert a column-level metadata key for a column identified by path_in_schema.
     pub fn set_column_tag(
         &mut self,
-        _column_path: &str,
-        _key: &str,
-        _value: Option<&str>,
-        _out_path: &str,
+        column_path: &str,
+        key: &str,
+        value: Option<&str>,
+        out_path: &str,
     ) -> PyResult<()> {
-        todo!()
+        self.inner.set_column_kv(column_path, key, value, out_path)?;
+        Ok(())
+    }
+
+    /// Apply multiple column tag mutations with a single footer write.
+    /// updates: list of (column_path, key, value) tuples; value=None removes the tag.
+    pub fn set_column_tags_batch(
+        &mut self,
+        updates: Vec<(String, String, Option<String>)>,
+        out_path: &str,
+    ) -> PyResult<()> {
+        self.inner.set_column_kvs(&updates, out_path)?;
+        Ok(())
     }
 }
 

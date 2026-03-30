@@ -1,18 +1,6 @@
-/**
- * MetadataTable — the central UI component.
- *
- * Rows = Parquet columns.
- * Fixed columns: physical_name, path_in_schema, physical_type, logical_type,
- *                repetition, field_id, null_count, min_value, max_value,
- *                compression, compressed_size.
- * User-defined columns: any key in the union of all column .tags objects.
- *                       Cells are editable inline.
- *
- * Users can add a new tag key via the "+ Add tag" header button, which creates
- * a new column and lets them fill values per row.
- */
-
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { Table } from "antd";
+import type { TableColumnsType } from "antd";
 import { api, ColumnInfo } from "../api";
 
 interface Props {
@@ -20,199 +8,292 @@ interface Props {
   onTagChange: () => void;
 }
 
-const FIXED_COLS: { key: keyof ColumnInfo; label: string }[] = [
-  { key: "physical_name", label: "Name" },
-  { key: "path_in_schema", label: "Path" },
-  { key: "physical_type", label: "Physical Type" },
-  { key: "logical_type", label: "Logical Type" },
-  { key: "repetition", label: "Repetition" },
-  { key: "field_id", label: "Field ID" },
-  { key: "null_count", label: "Null Count" },
-  { key: "min_value", label: "Min" },
-  { key: "max_value", label: "Max" },
-  { key: "compression", label: "Compression" },
-  { key: "total_compressed_size", label: "Compressed (B)" },
+const LABEL_W = 150;
+const DATA_W = 130;
+
+const META_ROWS: { key: keyof ColumnInfo; label: string }[] = [
+  { key: "path_in_schema",          label: "Path"         },
+  { key: "physical_name",           label: "Name"         },
+  { key: "physical_type",           label: "Type"         },
+  { key: "logical_type",            label: "Logical Type" },
+  { key: "repetition",              label: "Repetition"   },
+  { key: "field_id",                label: "Field ID"     },
+  { key: "null_count",              label: "Nulls"        },
+  { key: "distinct_count",          label: "Distincts"    },
+  { key: "min_value",               label: "Min"          },
+  { key: "max_value",               label: "Max"          },
+  { key: "compression",             label: "Compression"  },
+  { key: "total_compressed_size",   label: "Compressed"   },
+  { key: "total_uncompressed_size", label: "Uncompressed" },
 ];
 
+type Row = { key: string; label: string; isTag: boolean; [colPath: string]: unknown };
+
 export default function MetadataTable({ columns, onTagChange }: Props) {
-  const [newTagKey, setNewTagKey] = useState("");
+  const [pendingTagKeys, setPendingTagKeys] = useState<string[]>([]);
   const [addingTag, setAddingTag] = useState(false);
+  const [newTagKey, setNewTagKey] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Collect all tag keys across all columns.
-  const tagKeys = Array.from(
-    new Set(columns.flatMap((c) => Object.keys(c.tags)))
-  ).sort();
+  const allTagKeys = useMemo(() => {
+    const persisted = Array.from(new Set(columns.flatMap(c => Object.keys(c.tags || {}))));
+    return [...persisted, ...pendingTagKeys.filter(k => !persisted.includes(k))];
+  }, [columns, pendingTagKeys]);
 
-  const handleCellEdit = async (
-    col: ColumnInfo,
-    tagKey: string,
-    value: string
-  ) => {
-    await api.setColumnTag(col.path_in_schema, tagKey, value || null);
-    onTagChange();
-  };
+  const rows: Row[] = useMemo(() => {
+    const metaRows = META_ROWS.map(({ key, label }) => {
+      const row: Row = { key: key as string, label, isTag: false };
+      for (const col of columns) row[col.path_in_schema] = col[key];
+      return row;
+    });
+    const tagRows = allTagKeys.map(tagKey => {
+      const row: Row = { key: `tag:${tagKey}`, label: tagKey, isTag: true };
+      for (const col of columns) row[col.path_in_schema] = col.tags[tagKey] ?? null;
+      return row;
+    });
+    const addRow: Row = { key: "__add_tag__", label: "", isTag: false };
+    return [...metaRows, ...tagRows, addRow];
+  }, [columns, allTagKeys]);
 
   const handleAddTag = () => {
     const key = newTagKey.trim();
-    if (!key) return;
+    if (key && !allTagKeys.includes(key)) setPendingTagKeys(prev => [...prev, key]);
     setNewTagKey("");
     setAddingTag(false);
-    // Tag will appear once a value is set for any row; for now just close.
   };
 
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          borderCollapse: "collapse",
-          fontSize: 13,
-          width: "100%",
-        }}
-      >
-        <thead>
-          <tr>
-            {FIXED_COLS.map((c) => (
-              <Th key={c.key}>{c.label}</Th>
-            ))}
-            {tagKeys.map((k) => (
-              <Th key={k} mutable>
-                {k}
-              </Th>
-            ))}
-            <th style={{ padding: "6px 8px" }}>
-              {addingTag ? (
-                <span>
-                  <input
-                    autoFocus
-                    value={newTagKey}
-                    onChange={(e) => setNewTagKey(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
-                    style={{ width: 100, fontFamily: "monospace", fontSize: 12 }}
-                    placeholder="tag key"
-                  />
-                  <button onClick={handleAddTag} style={{ marginLeft: 4 }}>
-                    ✓
-                  </button>
-                  <button
-                    onClick={() => setAddingTag(false)}
-                    style={{ marginLeft: 2 }}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ) : (
-                <button
-                  onClick={() => setAddingTag(true)}
-                  style={{ cursor: "pointer" }}
-                >
-                  + Add tag
-                </button>
-              )}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {columns.map((col) => (
-            <tr key={col.path_in_schema}>
-              {FIXED_COLS.map((c) => (
-                <td
-                  key={c.key}
-                  style={{
-                    padding: "5px 8px",
-                    borderBottom: "1px solid #eee",
-                    color: col[c.key] == null ? "#aaa" : undefined,
-                  }}
-                >
-                  {col[c.key] == null ? "—" : String(col[c.key])}
-                </td>
-              ))}
-              {tagKeys.map((k) => (
-                <EditableCell
-                  key={k}
-                  value={col.tags[k] ?? ""}
-                  onSave={(v) => handleCellEdit(col, k, v)}
+  const handleDeleteTag = async (tagKey: string) => {
+    if (pendingTagKeys.includes(tagKey)) {
+      setPendingTagKeys(prev => prev.filter(k => k !== tagKey));
+      return;
+    }
+    try {
+      const updates = columns.map(col => ({ column_path: col.path_in_schema, key: tagKey, value: null as null }));
+      await api.setColumnTagsBatch(updates);
+      onTagChange();
+    } catch (e) {
+      setSaveError(String(e));
+    }
+  };
+
+  const tableColumns: TableColumnsType<Row> = [
+    {
+      key: "__field__",
+      title: "",
+      dataIndex: "label",
+      width: LABEL_W,
+      fixed: "left" as const,
+      onHeaderCell: () => ({ style: { background: "#fafafa" } }),
+      onCell: (row: Row) => ({ style: { background: row.isTag ? "#fffbe6" : row.key === "__add_tag__" ? "#fafafa" : "#fafafa" } }),
+      render: (_: string, row: Row) => {
+        if (row.key === "__add_tag__") {
+          if (addingTag) {
+            return (
+              <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <input
+                  autoFocus
+                  value={newTagKey}
+                  onChange={e => setNewTagKey(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleAddTag(); if (e.key === "Escape") { setAddingTag(false); setNewTagKey(""); } }}
+                  placeholder="tag name"
+                  style={{ ...css.input, width: 90 }}
                 />
-              ))}
-              <td />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                <button onClick={handleAddTag} style={css.btnConfirm}>Add</button>
+                <button onClick={() => { setAddingTag(false); setNewTagKey(""); }} style={css.btnCancel}>✕</button>
+              </span>
+            );
+          }
+          return <button onClick={() => setAddingTag(true)} style={css.btnAddTag}>+ Add tag</button>;
+        }
+        if (row.isTag) {
+          return (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "#c47d00", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {row.label}
+              </span>
+              <button onClick={() => handleDeleteTag(row.label)} style={css.btnDelete} title={`Delete tag "${row.label}"`}>×</button>
+            </span>
+          );
+        }
+        return (
+          <span style={{ fontSize: 12, color: "#555" }}>{row.label}</span>
+        );
+      },
+    },
+    ...columns.map(col => ({
+      key: col.path_in_schema,
+      title: col.path_in_schema,
+      width: DATA_W,
+      onHeaderCell: () => ({
+        title: col.path_in_schema,
+        style: { overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" },
+      }),
+      onCell: (row: Row) => ({
+        style: { background: row.isTag ? "#fffbe6" : undefined, padding: row.isTag ? 0 : undefined },
+      }),
+      render: (_: unknown, row: Row) => {
+        if (row.key === "__add_tag__") return null;
+        const val = row[col.path_in_schema];
+        if (row.isTag) {
+          return (
+            <EditableCell
+              value={String(val ?? "")}
+              onSave={(v: string) =>
+                api.setColumnTag(col.path_in_schema, row.label, v || null)
+                  .then(onTagChange)
+                  .catch(e => setSaveError(String(e)))
+              }
+            />
+          );
+        }
+        return val == null
+          ? <span style={{ color: "#ccc" }}>—</span>
+          : <span style={{ fontSize: 12 }}>{String(val)}</span>;
+      },
+    })),
+  ];
+
+  const totalWidth = LABEL_W + columns.length * DATA_W;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {saveError && (
+        <div style={css.errorBanner}>
+          {saveError}
+          <button onClick={() => setSaveError(null)} style={css.btnDismiss}>✕</button>
+        </div>
+      )}
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        <Table<Row>
+          dataSource={rows}
+          columns={tableColumns}
+          rowKey="key"
+          pagination={false}
+          size="small"
+          bordered
+          tableLayout="fixed"
+          scroll={{ x: totalWidth, y: "calc(100vh - 90px)" }}
+          style={{ fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace" }}
+        />
+      </div>
     </div>
   );
 }
 
-function Th({
-  children,
-  mutable,
-}: {
-  children: React.ReactNode;
-  mutable?: boolean;
-}) {
-  return (
-    <th
-      style={{
-        padding: "6px 8px",
-        textAlign: "left",
-        borderBottom: "2px solid #ccc",
-        background: mutable ? "#fffbe6" : undefined,
-        fontWeight: 600,
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function EditableCell({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (v: string) => void;
-}) {
+function EditableCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  if (editing) {
-    return (
-      <td style={{ padding: "3px 6px", background: "#fffbe6" }}>
+  useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
+
+  return (
+    <div
+      onClick={() => !editing && setEditing(true)}
+      style={{ position: "relative", minHeight: 24, cursor: editing ? "default" : "text" }}
+    >
+      {editing ? (
         <input
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            onSave(draft);
-            setEditing(false);
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => { onSave(draft); setEditing(false); }}
+          onKeyDown={e => {
+            if (e.key === "Enter") { onSave(draft); setEditing(false); }
+            if (e.key === "Escape") { setDraft(value); setEditing(false); }
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              onSave(draft);
-              setEditing(false);
-            }
-            if (e.key === "Escape") setEditing(false);
-          }}
-          style={{ fontFamily: "monospace", fontSize: 12, width: "100%" }}
+          style={css.cellInput}
         />
-      </td>
-    );
-  }
-
-  return (
-    <td
-      onClick={() => {
-        setDraft(value);
-        setEditing(true);
-      }}
-      style={{
-        padding: "5px 8px",
-        borderBottom: "1px solid #eee",
-        cursor: "text",
-        color: value ? undefined : "#aaa",
-        background: "#fffbe6",
-      }}
-    >
-      {value || "—"}
-    </td>
+      ) : (
+        <span style={{ display: "block", padding: "4px 8px", fontSize: 12 }}>
+          {value || <span style={{ color: "#ccc" }}>—</span>}
+        </span>
+      )}
+    </div>
   );
 }
+
+const css: Record<string, React.CSSProperties> = {
+  errorBanner: {
+    fontSize: 12,
+    color: "#c0392b",
+    background: "#fdf0ed",
+    border: "1px solid #f5c6bc",
+    borderRadius: 4,
+    padding: "4px 10px",
+    margin: "0 16px 6px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnDismiss: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#c0392b",
+    padding: 0,
+    fontSize: 11,
+  },
+  input: {
+    fontSize: 12,
+    padding: "3px 8px",
+    border: "1px solid #d9d9d9",
+    borderRadius: 3,
+    outline: "none",
+    fontFamily: "inherit",
+    width: 160,
+  },
+  btnConfirm: {
+    padding: "3px 10px",
+    fontSize: 12,
+    cursor: "pointer",
+    background: "#1677ff",
+    border: "none",
+    borderRadius: 3,
+    color: "#fff",
+    fontFamily: "inherit",
+  },
+  btnCancel: {
+    padding: "3px 8px",
+    fontSize: 12,
+    cursor: "pointer",
+    background: "transparent",
+    border: "1px solid #d9d9d9",
+    borderRadius: 3,
+    color: "#888",
+    fontFamily: "inherit",
+  },
+  btnAddTag: {
+    padding: "3px 10px",
+    fontSize: 12,
+    cursor: "pointer",
+    background: "transparent",
+    border: "1px dashed #ccc",
+    borderRadius: 3,
+    color: "#aaa",
+    fontFamily: "inherit",
+  },
+  btnDelete: {
+    flexShrink: 0,
+    padding: "0 3px",
+    fontSize: 13,
+    lineHeight: 1,
+    cursor: "pointer",
+    background: "none",
+    border: "none",
+    color: "#ccc",
+    fontFamily: "inherit",
+  },
+  cellInput: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    padding: "4px 8px",
+    border: "none",
+    outline: "2px solid #1677ff",
+    outlineOffset: -2,
+    fontFamily: "inherit",
+    fontSize: 12,
+    background: "#fff",
+    zIndex: 1,
+  },
+};

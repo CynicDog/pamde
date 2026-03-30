@@ -2,7 +2,7 @@
 
 Open a Parquet file, inspect every column's schema and statistics, and tag metadata key/value pairs directly from your browser.
 
-```bash 
+```bash
 pamde edit my_data.parquet
 ```
 
@@ -11,24 +11,26 @@ pamde edit my_data.parquet
 ### Docker
 
 ```bash
-docker build -t pamde .
-```
-
-```bash
 docker run -p 2971:2971 \
   -v "$(pwd)/my_data.parquet:/data/file.parquet" \
-  pamde /data/file.parquet
+  ghcr.io/cynicdog/pamde:latest /data/file.parquet
 ```
 
 Open **http://localhost:2971** in your browser.
 
-To edit a file in the current directory, replace `$(pwd)/my_data.parquet` with the actual path to your file.
-
 ### Local
 
-**Requirements:** Python ≥ 3.10, Node.js ≥ 18, `uv`
+**Requirements:** Python ≥ 3.10, Node.js ≥ 18, Rust toolchain, `uv`, `maturin`
 
-**1. Build the UI**
+**1. Build the Rust extension**
+
+```bash
+cd py-pamde/runtime/pamde-runtime
+maturin develop
+cd ../../..
+```
+
+**2. Build the UI**
 
 ```bash
 cd ui
@@ -37,7 +39,7 @@ npm run build
 cd ..
 ```
 
-**2. Install the Python package**
+**3. Install the Python package**
 
 ```bash
 cd py-pamde
@@ -45,13 +47,32 @@ uv venv .venv
 uv pip install -e .
 ```
 
-**3. Run**
+**4. Run**
 
 ```bash
 .venv/bin/pamde edit path/to/your_file.parquet
 ```
 
 Open **http://localhost:2971** in your browser.
+
+## Running Tests
+
+**Requirements:** complete steps 1 and 3 above first (Rust extension + Python package installed).
+
+```bash
+cd py-pamde
+uv pip install pytest
+.venv/bin/pytest tests/ -v
+```
+
+Expected output: **39 passed**.
+
+The tests cover:
+- Schema introspection (column count, names, types, repetition, field_id)
+- Statistics (null count, min/max, compression, sizes)
+- File-level tag set / update / remove / unicode
+- Column-level tag set / update / remove / isolation
+- File integrity after edits (data unchanged, stats preserved, in-place roundtrip)
 
 ## What it does
 
@@ -62,13 +83,16 @@ Parquet files carry rich metadata in their footer:
 - **Encoding & compression** — per column chunk
 - **`key_value_metadata`** — arbitrary string tags at file level and per column
 
-pamde shows all of this in a table (rows = columns, columns = metadata fields) and lets you add and edit `key_value_metadata` inline.
+pamde shows all of this in a table (rows = columns, columns = metadata fields) and lets you add and edit `key_value_metadata` inline. Only the file footer is read or rewritten — row data is never touched.
 
 ## CLI
 
 ```bash
 # Open editor UI
 pamde edit my_data.parquet
+
+# Start without a file — upload one from the browser
+pamde run
 
 # Print metadata summary to stdout
 pamde inspect my_data.parquet
@@ -102,11 +126,11 @@ pamde/
 ├── py-pamde/
 │   ├── runtime/pamde-runtime/   maturin bridge → _pamde_runtime.so
 │   ├── src/pamde/
-│   │   ├── editor.py        ParquetEditor (auto-selects Rust or pyarrow backend)
-│   │   ├── cli.py           pamde edit / pamde inspect
+│   │   ├── editor.py        ParquetEditor Python API
+│   │   ├── cli.py           pamde edit / pamde run / pamde inspect
 │   │   └── server/          FastAPI server + REST routes
 │   └── tests/
 └── ui/                      React + TypeScript (Vite)
 ```
 
-The editor currently uses a **pyarrow backend** for metadata access. The Rust backend (`pamde-runtime`) is a drop-in replacement that will be preferred automatically once built via `maturin develop`.
+Metadata reads and writes go through the Rust extension exclusively. The footer is rewritten in-place using thrift serialization — data pages are never touched.

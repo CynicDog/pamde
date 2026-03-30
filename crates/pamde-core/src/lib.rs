@@ -23,6 +23,18 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::Io(e)
+    }
+}
+
+impl From<parquet::errors::ParquetError> for Error {
+    fn from(e: parquet::errors::ParquetError) -> Self {
+        Error::Parquet(e.to_string())
+    }
+}
+
 #[cfg(feature = "extension-module")]
 impl From<Error> for pyo3::PyErr {
     fn from(e: Error) -> Self {

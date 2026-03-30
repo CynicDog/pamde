@@ -2,6 +2,7 @@
 pamde CLI entry points.
 
     uv run pamde edit my_data.parquet
+    uv run pamde run
     uv run pamde inspect my_data.parquet
 """
 
@@ -15,21 +16,14 @@ app = typer.Typer(
 )
 
 
-@app.command()
-def edit(
-    path: str = typer.Argument(..., help="Path to the Parquet file to edit."),
-    host: str = typer.Option("127.0.0.1", help="Server host."),
-    port: int = typer.Option(2971, help="Server port."),
-    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser."),
-) -> None:
-    """Open the metadata editor UI for a Parquet file."""
+def _serve(parquet_path: str | None, host: str, port: int, no_browser: bool) -> None:
     import webbrowser
 
     import uvicorn
 
     from pamde.server.app import create_app
 
-    server_app = create_app(parquet_path=path)
+    server_app = create_app(parquet_path=parquet_path)
     url = f"http://{host}:{port}"
 
     if not no_browser:
@@ -43,9 +37,30 @@ def edit(
 
         threading.Thread(target=_open, daemon=True).start()
 
-    typer.echo(f"pamde editor running at {url}")
+    typer.echo(f"pamde running at {url}")
     typer.echo("Press Ctrl+C to stop.")
     uvicorn.run(server_app, host=host, port=port)
+
+
+@app.command()
+def edit(
+    path: str = typer.Argument(..., help="Path to the Parquet file to edit."),
+    host: str = typer.Option("127.0.0.1", help="Server host."),
+    port: int = typer.Option(2971, help="Server port."),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser."),
+) -> None:
+    """Open the metadata editor UI for a specific Parquet file."""
+    _serve(parquet_path=path, host=host, port=port, no_browser=no_browser)
+
+
+@app.command()
+def run(
+    host: str = typer.Option("127.0.0.1", help="Server host."),
+    port: int = typer.Option(2971, help="Server port."),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser."),
+) -> None:
+    """Start the editor without a file — upload one from the browser."""
+    _serve(parquet_path=None, host=host, port=port, no_browser=no_browser)
 
 
 @app.command()

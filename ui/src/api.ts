@@ -1,9 +1,3 @@
-/**
- * Typed client for the pamde REST API.
- * All requests go to /api/... which is proxied to the FastAPI server in dev
- * and served directly in production.
- */
-
 export interface ColumnInfo {
   physical_name: string;
   path_in_schema: string;
@@ -23,7 +17,13 @@ export interface ColumnInfo {
 
 export interface FileInfo {
   path: string;
+  file: string;
   tags: Record<string, string | null>;
+}
+
+export interface Status {
+  mode: "edit" | "run";
+  file: string | null;
 }
 
 const BASE = "/api";
@@ -45,10 +45,31 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
+  getStatus: () => get<Status>("/status"),
   getFile: () => get<FileInfo>("/file"),
   getColumns: () => get<ColumnInfo[]>("/columns"),
+
+  uploadFile: async (file: File): Promise<{ file: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}/upload`, { method: "POST", body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail ?? res.statusText);
+    }
+    return res.json();
+  },
+
   setFileTag: (key: string, value: string | null) =>
     post("/file/tags", { key, value }),
   setColumnTag: (column_path: string, key: string, value: string | null) =>
     post("/columns/tags", { column_path, key, value }),
+  setColumnTagsBatch: (updates: { column_path: string; key: string; value: string | null }[]) =>
+    post("/columns/tags/batch", { updates }),
+
+  downloadFile: () => {
+    const a = document.createElement("a");
+    a.href = `${BASE}/download`;
+    a.click();
+  },
 };

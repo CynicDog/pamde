@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pamde-core = { path = "../../../crates/pamde-core", features = ["extension-module"] }
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.28", features = ["extension-module"] }
