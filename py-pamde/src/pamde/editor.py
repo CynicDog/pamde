@@ -61,7 +61,7 @@ class ParquetEditor:
     """Open a Parquet file for metadata inspection and editing."""
 
     _path: Path
-    _backend: PyParquetFile
+    _backend: Any
 
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
